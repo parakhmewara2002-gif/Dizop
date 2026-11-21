@@ -1,0 +1,7 @@
+{
+  "versionCode": 100,
+  "versionName": "1.0.0",
+  "changelog": "Dizop V2: Full RFC 8011 IPP Binary Parser, USB OTG, Multi-Protocol Discovery & 2-in-1 ID Card Scanner",
+  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.0/Dizop.apk",
+  "expectedSha256": "c418523420e33c350d59aea54e40751a7f1ea0d568b2c24841203a4e6835e619"
+}
