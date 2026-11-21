@@ -442,6 +442,60 @@ fun MainDashboardScreen(
                 }
             }
 
+            // In-App Update Banner
+            if (updateInfo?.hasUpdate == true) {
+                item {
+                    IosCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        backgroundColor = IosBlue.copy(alpha = 0.08f),
+                        cornerRadius = 18.dp,
+                        onClick = {
+                            HapticFeedbackHelper.performClick(context)
+                            updateManager.startUpdateDownload(
+                                apkUrl = updateInfo!!.downloadUrl,
+                                expectedSha256 = updateInfo!!.expectedSha256
+                            )
+                        }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.SystemUpdate,
+                                contentDescription = "Update",
+                                tint = IosBlue,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Update Available (v${updateInfo!!.latestVersionName})",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp,
+                                    color = IosTextPrimary
+                                )
+                                Text(
+                                    text = updateInfo!!.releaseNotes,
+                                    fontSize = 12.sp,
+                                    color = IosTextSecondary
+                                )
+                            }
+                            if (isDownloadingUpdate) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = IosBlue)
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(IosBlue)
+                                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Install", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             // Print Output Mode Selector (Color vs B&W)
             item {
                 IosSegmentedControl(
@@ -785,60 +839,6 @@ fun MainDashboardScreen(
                 }
             }
 
-            // In-App Update Banner
-            if (updateInfo?.hasUpdate == true) {
-                item {
-                    IosCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = IosBlue.copy(alpha = 0.08f),
-                        cornerRadius = 18.dp,
-                        onClick = {
-                            HapticFeedbackHelper.performClick(context)
-                            updateManager.startUpdateDownload(
-                                apkUrl = updateInfo!!.downloadUrl,
-                                expectedSha256 = updateInfo!!.expectedSha256
-                            )
-                        }
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.SystemUpdate,
-                                contentDescription = "Update",
-                                tint = IosBlue,
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Update Available (v${updateInfo!!.latestVersionName})",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp,
-                                    color = IosTextPrimary
-                                )
-                                Text(
-                                    text = updateInfo!!.releaseNotes,
-                                    fontSize = 12.sp,
-                                    color = IosTextSecondary
-                                )
-                            }
-                            if (isDownloadingUpdate) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = IosBlue)
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(IosBlue)
-                                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                                ) {
-                                    Text("Install", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             // Action Quick-Grid
             item {

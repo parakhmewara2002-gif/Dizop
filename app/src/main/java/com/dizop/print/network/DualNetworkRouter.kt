@@ -35,22 +35,13 @@ class DualNetworkRouter(private val context: Context) {
 
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                Log.i("DizopNetwork", "Printer Wi-Fi network detected! Binding socket routing...")
+                Log.i("DizopNetwork", "Printer Wi-Fi network detected!")
                 _printerWifiNetwork.value = network
-                
-                try {
-                    connectivityManager.bindProcessToNetwork(network)
-                } catch (e: Exception) {
-                    Log.w("DizopNetwork", "bindProcessToNetwork info", e)
-                }
             }
 
             override fun onLost(network: Network) {
                 if (_printerWifiNetwork.value == network) {
                     _printerWifiNetwork.value = null
-                    try {
-                        connectivityManager.bindProcessToNetwork(null)
-                    } catch (_: Exception) {}
                 }
             }
         }
