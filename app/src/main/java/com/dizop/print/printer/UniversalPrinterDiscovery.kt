@@ -229,6 +229,36 @@ class UniversalPrinterDiscovery(
         }
     }
 
+    fun addPrinterManually(
+        host: String,
+        port: Int = 631,
+        name: String = "Manual IP Printer",
+        resourcePath: String = "ipp/print",
+        protocol: PrinterProtocol = PrinterProtocol.IPP
+    ) {
+        val printer = DiscoveredPrinter(
+            id = "$host:$port",
+            name = name,
+            model = "Direct IP Printer ($host)",
+            hostAddress = host,
+            port = port,
+            resourcePath = resourcePath.trimStart('/'),
+            brand = detectBrand(name),
+            protocol = protocol,
+            isOnline = true,
+            isReady = true,
+            inkLevels = emptyList()
+        )
+        val list = _printers.value.toMutableList()
+        val existingIndex = list.indexOfFirst { it.id == printer.id }
+        if (existingIndex >= 0) {
+            list[existingIndex] = printer
+        } else {
+            list.add(0, printer)
+        }
+        _printers.value = list
+    }
+
     fun stopDiscovery() {
         if (!_isScanning.value) return
         try {

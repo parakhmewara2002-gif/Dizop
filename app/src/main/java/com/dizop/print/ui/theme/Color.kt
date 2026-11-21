@@ -8,6 +8,7 @@ val IosIndigo = Color(0xFF5856D6)
 val IosGreen = Color(0xFF34C759)
 val IosTeal = Color(0xFF30B0C7)
 val IosOrange = Color(0xFFFF9500)
+val IosPurple = Color(0xFFAF52DE)
 val IosRed = Color(0xFFFF3B30)
 
 // Background & Surfaces

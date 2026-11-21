@@ -55,12 +55,16 @@ class IppClient(private val client: OkHttpClient = OkHttpClient.Builder()
                 PaperSize.A3 -> "iso_a3_297x420mm"
                 PaperSize.A5 -> "iso_a5_148x210mm"
                 PaperSize.PHOTO_4X6 -> "na_index-4x6_4x6in"
+                PaperSize.PHOTO_5X7 -> "na_5x7_5x7in"
+                PaperSize.PHOTO_PASSPORT -> "om_passport_35x45mm"
+                PaperSize.PHOTO_2X2 -> "om_id_51x51mm"
                 else -> "iso_a4_210x297mm"
             }
 
             val duplexKeyword = when (config?.duplexMode) {
                 DuplexMode.TWO_SIDED_LONG_EDGE -> "two-sided-long-edge"
                 DuplexMode.TWO_SIDED_SHORT_EDGE -> "two-sided-short-edge"
+                DuplexMode.MANUAL_ODD_ONLY, DuplexMode.MANUAL_EVEN_ONLY -> "one-sided"
                 else -> "one-sided"
             }
 

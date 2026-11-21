@@ -44,6 +44,11 @@ import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Usb
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +84,7 @@ import com.dizop.print.ui.theme.IosBlue
 import com.dizop.print.ui.theme.IosGreen
 import com.dizop.print.ui.theme.IosIndigo
 import com.dizop.print.ui.theme.IosOrange
+import com.dizop.print.ui.theme.IosPurple
 import com.dizop.print.ui.theme.IosRed
 import com.dizop.print.ui.theme.IosTeal
 import com.dizop.print.ui.theme.IosTextPrimary
@@ -121,6 +127,16 @@ fun MainDashboardScreen(
     var pendingPdfToPrint by remember { mutableStateOf<File?>(null) }
     var pendingJobTitle by remember { mutableStateOf("Dizop Document") }
 
+    // Manual Printer Dialog State
+    var showManualPrinterDialog by remember { mutableStateOf(false) }
+    var manualHostInput by remember { mutableStateOf("") }
+    var manualPortInput by remember { mutableStateOf("631") }
+    var manualNameInput by remember { mutableStateOf("") }
+
+    // Web Page Print State
+    var showWebPrintDialog by remember { mutableStateOf(false) }
+    var webUrlInput by remember { mutableStateOf("https://") }
+
     val updateInfo by updateManager.updateState.collectAsState()
     val isDownloadingUpdate by updateManager.isDownloading.collectAsState()
 
@@ -139,7 +155,22 @@ fun MainDashboardScreen(
                 printerName = selectedPrinter?.name ?: "All Printers"
             )
 
-            val result = printEngine.printDocument(selectedPrinter, file, title, config)
+            // Apply N-Up, Poster, Margin & Duplex Page Layout transformations if necessary
+            val fileToPrint = if (config != null && (
+                config.pagesPerSheet != com.dizop.print.printer.config.PagesPerSheet.ONE ||
+                config.posterMode != com.dizop.print.printer.config.PosterMode.NONE ||
+                config.duplexMode == com.dizop.print.printer.config.DuplexMode.MANUAL_ODD_ONLY ||
+                config.duplexMode == com.dizop.print.printer.config.DuplexMode.MANUAL_EVEN_ONLY ||
+                config.margins != com.dizop.print.printer.config.PageMargins.NORMAL
+            )) {
+                val transformedPdf = File(context.cacheDir, "dizop_transformed_layout_${System.currentTimeMillis()}.pdf")
+                val success = com.dizop.print.printer.layout.PageLayoutProcessor.processPdfLayout(file, transformedPdf, config)
+                if (success) transformedPdf else file
+            } else {
+                file
+            }
+
+            val result = printEngine.printDocument(selectedPrinter, fileToPrint, title, config)
             if (result.isSuccess) {
                 HapticFeedbackHelper.performSuccess(context)
                 dynamicIslandState = PrintActivityState(isComplete = true)
@@ -429,6 +460,152 @@ fun MainDashboardScreen(
                             showPreviewDialog = false
                         }
                     )
+                }
+            }
+
+            // Manual Printer Addition Sheet
+            if (showManualPrinterDialog) {
+                item {
+                    IosCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 20.dp
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Add Printer by IP",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = IosTextPrimary
+                                )
+                                IconButton(onClick = { showManualPrinterDialog = false }) {
+                                    Icon(Icons.Rounded.Close, contentDescription = "Close")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            androidx.compose.material3.OutlinedTextField(
+                                value = manualHostInput,
+                                onValueChange = { manualHostInput = it },
+                                label = { Text("IP Address or Hostname") },
+                                placeholder = { Text("192.168.1.100") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = manualPortInput,
+                                    onValueChange = { manualPortInput = it },
+                                    label = { Text("Port (631 IPP / 9100 RAW)") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = manualNameInput,
+                                    onValueChange = { manualNameInput = it },
+                                    label = { Text("Printer Name") },
+                                    placeholder = { Text("Office HP Laser") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Button(
+                                onClick = {
+                                    val host = manualHostInput.trim()
+                                    if (host.isNotEmpty()) {
+                                        val port = manualPortInput.trim().toIntOrNull() ?: 631
+                                        val name = manualNameInput.trim().ifEmpty { "Printer ($host)" }
+                                        discovery.addPrinterManually(
+                                            host = host,
+                                            port = port,
+                                            name = name,
+                                            protocol = if (port == 9100) com.dizop.print.data.PrinterProtocol.RAW_JETDIRECT else com.dizop.print.data.PrinterProtocol.IPP
+                                        )
+                                        showManualPrinterDialog = false
+                                        manualHostInput = ""
+                                        Toast.makeText(context, "Added printer: $name", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = IosBlue)
+                            ) {
+                                Text("Connect to Printer", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Web Page Print URL Dialog
+            if (showWebPrintDialog) {
+                item {
+                    IosCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 20.dp
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Print Web Page",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = IosTextPrimary
+                                )
+                                IconButton(onClick = { showWebPrintDialog = false }) {
+                                    Icon(Icons.Rounded.Close, contentDescription = "Close")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            androidx.compose.material3.OutlinedTextField(
+                                value = webUrlInput,
+                                onValueChange = { webUrlInput = it },
+                                label = { Text("Web URL") },
+                                placeholder = { Text("https://en.wikipedia.org") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Button(
+                                onClick = {
+                                    val url = webUrlInput.trim()
+                                    if (url.startsWith("http://") || url.startsWith("https://")) {
+                                        showWebPrintDialog = false
+                                        val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as android.print.PrintManager
+                                        val webView = android.webkit.WebView(context)
+                                        webView.webViewClient = object : android.webkit.WebViewClient() {
+                                            override fun onPageFinished(view: android.webkit.WebView?, u: String?) {
+                                                val printAdapter = webView.createPrintDocumentAdapter("Web Print")
+                                                printManager.print("Web Document", printAdapter, android.print.PrintAttributes.Builder().build())
+                                            }
+                                        }
+                                        webView.loadUrl(url)
+                                        Toast.makeText(context, "Loading page for print...", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Invalid URL (must start with http:// or https://)", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = IosTeal)
+                            ) {
+                                Text("Generate Web Print Preview", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -751,6 +928,37 @@ fun MainDashboardScreen(
                         onClick = {
                             HapticFeedbackHelper.performClick(context)
                             pdfCompressLauncher.launch("application/pdf")
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ActionTile(
+                        modifier = Modifier.weight(1f),
+                        title = "Print Web Page",
+                        subtitle = "URL / HTML to Paper",
+                        icon = Icons.Rounded.Language,
+                        iconBackground = IosTeal,
+                        onClick = {
+                            HapticFeedbackHelper.performClick(context)
+                            showWebPrintDialog = true
+                        }
+                    )
+
+                    ActionTile(
+                        modifier = Modifier.weight(1f),
+                        title = "Add by IP Address",
+                        subtitle = "Manual Network Setup",
+                        icon = Icons.Rounded.Add,
+                        iconBackground = IosPurple,
+                        onClick = {
+                            HapticFeedbackHelper.performClick(context)
+                            showManualPrinterDialog = true
                         }
                     )
                 }
