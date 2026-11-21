@@ -51,30 +51,38 @@ class InAppUpdateManager(private val context: Context) {
             }
 
             val url = URL(manifestUrl)
+            Log.d("InAppUpdate", "Checking update at $manifestUrl (Current code: $currentVersionCode)")
             val connection = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 4000
-                readTimeout = 4000
+                connectTimeout = 6000
+                readTimeout = 6000
+                setRequestProperty("User-Agent", "Dizop-Android-App")
             }
-            if (connection.responseCode == 200) {
+            val responseCode = connection.responseCode
+            Log.d("InAppUpdate", "Manifest HTTP response code: $responseCode")
+            if (responseCode == 200) {
                 val jsonStr = connection.inputStream.bufferedReader().use { it.readText() }
+                Log.d("InAppUpdate", "Manifest content: $jsonStr")
                 val json = JSONObject(jsonStr)
                 val remoteCode = json.optInt("versionCode", 0)
                 val remoteName = json.optString("versionName", "1.0.0")
                 val notes = json.optString("changelog", "Performance improvements & bug fixes")
                 val apkUrl = json.optString("apkUrl", "")
+                val sha = json.optString("expectedSha256", "")
 
                 val update = UpdateInfo(
                     hasUpdate = remoteCode > currentVersionCode,
                     latestVersionCode = remoteCode,
                     latestVersionName = remoteName,
                     releaseNotes = notes,
-                    downloadUrl = apkUrl
+                    downloadUrl = apkUrl,
+                    expectedSha256 = sha
                 )
+                Log.d("InAppUpdate", "Parsed update: hasUpdate=${update.hasUpdate}, remoteCode=$remoteCode vs local=$currentVersionCode")
                 _updateState.value = update
                 return@withContext update
             }
-        } catch (_: Exception) {
-            // Offline or manifest unavailable
+        } catch (e: Exception) {
+            Log.e("InAppUpdate", "Error checking for updates", e)
         }
         null
     }

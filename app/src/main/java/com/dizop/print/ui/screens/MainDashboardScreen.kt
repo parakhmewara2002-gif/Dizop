@@ -55,6 +55,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -139,6 +140,12 @@ fun MainDashboardScreen(
 
     val updateInfo by updateManager.updateState.collectAsState()
     val isDownloadingUpdate by updateManager.isDownloading.collectAsState()
+
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            updateManager.checkForUpdates()
+        }
+    }
 
     fun triggerPrint(file: File, title: String) {
         pendingPdfToPrint = file
@@ -787,7 +794,10 @@ fun MainDashboardScreen(
                         cornerRadius = 18.dp,
                         onClick = {
                             HapticFeedbackHelper.performClick(context)
-                            updateManager.startUpdateDownload(updateInfo!!.downloadUrl)
+                            updateManager.startUpdateDownload(
+                                apkUrl = updateInfo!!.downloadUrl,
+                                expectedSha256 = updateInfo!!.expectedSha256
+                            )
                         }
                     ) {
                         Row(
