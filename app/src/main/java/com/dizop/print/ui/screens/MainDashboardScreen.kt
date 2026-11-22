@@ -144,6 +144,17 @@ fun MainDashboardScreen(
     var showQrPrintDialog by remember { mutableStateOf(false) }
     var qrContentInput by remember { mutableStateOf("https://dizop.app") }
 
+    // CameraX Live Scanner View State
+    var showCameraXScanner by remember { mutableStateOf(false) }
+
+    // Database for History & Saved Printers
+    val dbHelper = remember { com.dizop.print.data.local.DizopDatabaseHelper(context) }
+    var printHistory by remember { mutableStateOf<List<com.dizop.print.data.local.PrintHistoryRecord>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        printHistory = dbHelper.getRecentHistory()
+    }
+
     val updateInfo by updateManager.updateState.collectAsState()
     val isDownloadingUpdate by updateManager.isDownloading.collectAsState()
 
@@ -201,10 +212,22 @@ fun MainDashboardScreen(
             if (result.isSuccess) {
                 HapticFeedbackHelper.performSuccess(context)
                 val isDirectHardwareSpool = selectedPrinter != null
+                val statusMsg = if (isDirectHardwareSpool) "Sent to Printer" else "Print Spooled"
                 dynamicIslandState = PrintActivityState(
-                    statusMessage = if (isDirectHardwareSpool) "Sent to Printer" else "Print Spooled",
+                    statusMessage = statusMsg,
                     isComplete = true
                 )
+
+                // Save to local print history
+                dbHelper.insertHistory(
+                    com.dizop.print.data.local.PrintHistoryRecord(
+                        title = title,
+                        printerName = selectedPrinter?.name ?: "Android Print Spooler",
+                        status = statusMsg
+                    )
+                )
+                printHistory = dbHelper.getRecentHistory()
+
                 delay(2400)
                 dynamicIslandState = PrintActivityState()
             } else {
@@ -976,12 +999,12 @@ fun MainDashboardScreen(
                     ActionTile(
                         modifier = Modifier.weight(1f),
                         title = "Smart Scan",
-                        subtitle = "Auto White & Shadow Filter",
+                        subtitle = "CameraX High-Res Viewfinder",
                         icon = Icons.Rounded.DocumentScanner,
                         iconBackground = IosTeal,
                         onClick = {
                             HapticFeedbackHelper.performClick(context)
-                            cameraScanLauncher.launch(null)
+                            showCameraXScanner = true
                         }
                     )
 
@@ -1155,9 +1178,77 @@ fun MainDashboardScreen(
                 }
             }
 
+            // Print Job History Section (Offline SQLite Database)
+            if (printHistory.isNotEmpty()) {
+                item(key = "history_header") {
+                    Text(
+                        text = "RECENT PRINT ACTIVITY",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = IosTextSecondary,
+                        letterSpacing = 0.5.sp,
+                        modifier = Modifier.padding(start = 4.dp, top = 10.dp)
+                    )
+                }
+
+                items(printHistory.take(5), key = { "hist_${it.id}" }) { hist ->
+                    IosCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 16.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = hist.title,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = IosTextPrimary
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "${hist.printerName} • ${hist.status}",
+                                    fontSize = 12.sp,
+                                    color = IosTextSecondary
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                tint = IosGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             item {
                 Spacer(modifier = Modifier.height(40.dp))
             }
+        }
+
+        // CameraX Full-Res Viewfinder Overlay
+        if (showCameraXScanner) {
+            com.dizop.print.ui.components.CameraXScannerView(
+                onImageCaptured = { fullResBitmap ->
+                    showCameraXScanner = false
+                    coroutineScope.launch {
+                        val filter = if (printColorMode == 1) com.dizop.print.scanner.DocScannerFilter.DOCUMENT_BW else com.dizop.print.scanner.DocScannerFilter.MAGIC_COLOR
+                        val processed = com.dizop.print.scanner.DocumentFilterEngine.applyFilter(fullResBitmap, filter)
+                        val tempPdf = File(context.cacheDir, "camerax_scan_${System.currentTimeMillis()}.pdf")
+                        SmartDocumentProcessor.createPdfFromBitmaps(listOf(processed), tempPdf)
+                        HapticFeedbackHelper.performSuccess(context)
+                        triggerPrint(tempPdf, "CameraX Document Scan")
+                    }
+                },
+                onClose = {
+                    showCameraXScanner = false
+                }
+            )
         }
     }
 }
