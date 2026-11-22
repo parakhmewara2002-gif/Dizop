@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -150,9 +151,11 @@ fun MainDashboardScreen(
     // Database for History & Saved Printers
     val dbHelper = remember { com.dizop.print.data.local.DizopDatabaseHelper(context) }
     var printHistory by remember { mutableStateOf<List<com.dizop.print.data.local.PrintHistoryRecord>>(emptyList()) }
+    var savedPrinters by remember { mutableStateOf<List<com.dizop.print.data.local.SavedPrinterRecord>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         printHistory = dbHelper.getRecentHistory()
+        savedPrinters = dbHelper.getAllSavedPrinters()
     }
 
     val updateInfo by updateManager.updateState.collectAsState()
@@ -629,22 +632,35 @@ fun MainDashboardScreen(
                                     if (host.isNotEmpty()) {
                                         val port = manualPortInput.trim().toIntOrNull() ?: 631
                                         val name = manualNameInput.trim().ifEmpty { "Printer ($host)" }
+                                        val protocol = if (port == 9100) com.dizop.print.data.PrinterProtocol.RAW_JETDIRECT else com.dizop.print.data.PrinterProtocol.IPP
                                         discovery.addPrinterManually(
                                             host = host,
                                             port = port,
                                             name = name,
-                                            protocol = if (port == 9100) com.dizop.print.data.PrinterProtocol.RAW_JETDIRECT else com.dizop.print.data.PrinterProtocol.IPP
+                                            protocol = protocol
                                         )
+                                        coroutineScope.launch {
+                                            dbHelper.savePrinter(
+                                                com.dizop.print.data.local.SavedPrinterRecord(
+                                                    name = name,
+                                                    host = host,
+                                                    port = port,
+                                                    protocol = protocol.name
+                                                )
+                                            )
+                                            savedPrinters = dbHelper.getAllSavedPrinters()
+                                        }
                                         showManualPrinterDialog = false
                                         manualHostInput = ""
-                                        Toast.makeText(context, "Added printer: $name", Toast.LENGTH_SHORT).show()
+                                        manualNameInput = ""
+                                        Toast.makeText(context, "Saved & Added printer: $name", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth().height(48.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = IosBlue)
                             ) {
-                                Text("Connect to Printer", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                Text("Connect & Save Printer", color = Color.White, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -1105,6 +1121,86 @@ fun MainDashboardScreen(
                 }
             }
 
+            // Saved & Favorite Printers Section
+            if (savedPrinters.isNotEmpty()) {
+                item(key = "saved_printers_header") {
+                    Text(
+                        text = "SAVED PRINTERS (${savedPrinters.size})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = IosTextSecondary,
+                        letterSpacing = 0.5.sp,
+                        modifier = Modifier.padding(start = 4.dp, top = 6.dp)
+                    )
+                }
+
+                items(savedPrinters, key = { "saved_${it.id}" }) { saved ->
+                    IosCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 16.dp,
+                        onClick = {
+                            val protocol = if (saved.protocol == com.dizop.print.data.PrinterProtocol.RAW_JETDIRECT.name) {
+                                com.dizop.print.data.PrinterProtocol.RAW_JETDIRECT
+                            } else {
+                                com.dizop.print.data.PrinterProtocol.IPP
+                            }
+                            discovery.addPrinterManually(
+                                host = saved.host,
+                                port = saved.port,
+                                name = saved.name,
+                                protocol = protocol
+                            )
+                            HapticFeedbackHelper.performSelection(context)
+                            Toast.makeText(context, "Activated saved printer: ${saved.name}", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(IosIndigo.copy(alpha = 0.15f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Star,
+                                        contentDescription = null,
+                                        tint = IosIndigo,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = saved.name,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = IosTextPrimary
+                                    )
+                                    Text(
+                                        text = "${saved.host}:${saved.port} (${saved.protocol})",
+                                        fontSize = 12.sp,
+                                        color = IosTextSecondary
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Tap to Connect",
+                                fontSize = 12.sp,
+                                color = IosBlue,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+
             // Discovered Printers Section
             item(key = "printers_header") {
                 Row(
@@ -1234,15 +1330,17 @@ fun MainDashboardScreen(
         // CameraX Full-Res Viewfinder Overlay
         if (showCameraXScanner) {
             com.dizop.print.ui.components.CameraXScannerView(
-                onImageCaptured = { fullResBitmap ->
+                onImagesCaptured = { fullResBitmaps ->
                     showCameraXScanner = false
                     coroutineScope.launch {
                         val filter = if (printColorMode == 1) com.dizop.print.scanner.DocScannerFilter.DOCUMENT_BW else com.dizop.print.scanner.DocScannerFilter.MAGIC_COLOR
-                        val processed = com.dizop.print.scanner.DocumentFilterEngine.applyFilter(fullResBitmap, filter)
+                        val processedList = fullResBitmaps.map { 
+                            com.dizop.print.scanner.DocumentFilterEngine.applyFilter(it, filter)
+                        }
                         val tempPdf = File(context.cacheDir, "camerax_scan_${System.currentTimeMillis()}.pdf")
-                        SmartDocumentProcessor.createPdfFromBitmaps(listOf(processed), tempPdf)
+                        SmartDocumentProcessor.createPdfFromBitmaps(processedList, tempPdf)
                         HapticFeedbackHelper.performSuccess(context)
-                        triggerPrint(tempPdf, "CameraX Document Scan")
+                        triggerPrint(tempPdf, "CameraX Batch Scan (${processedList.size} pages)")
                     }
                 },
                 onClose = {

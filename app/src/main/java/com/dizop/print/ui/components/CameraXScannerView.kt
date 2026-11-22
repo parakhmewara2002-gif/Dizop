@@ -13,6 +13,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,9 +35,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,7 +54,7 @@ import java.util.concurrent.Executors
 
 @Composable
 fun CameraXScannerView(
-    onImageCaptured: (Bitmap) -> Unit,
+    onImagesCaptured: (List<Bitmap>) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -60,6 +63,7 @@ fun CameraXScannerView(
     var isFlashOn by remember { mutableStateOf(false) }
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
     var cameraControl: androidx.camera.core.CameraControl? by remember { mutableStateOf(null) }
+    val capturedPages = remember { mutableStateListOf<Bitmap>() }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         // Camera Preview
@@ -129,7 +133,7 @@ fun CameraXScannerView(
             }
 
             Text(
-                text = "Align Document in Frame",
+                text = if (capturedPages.isEmpty()) "Align Document in Frame" else "Captured ${capturedPages.size} Page(s)",
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold
@@ -150,59 +154,105 @@ fun CameraXScannerView(
             }
         }
 
-        // Bottom Capture Button
-        Column(
+        // Bottom Controls: Done Button + Shutter + Batch Counter
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 36.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(bottom = 36.dp, start = 24.dp, end = 24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = {
-                    val capture = imageCapture ?: return@IconButton
-                    val executor = Executors.newSingleThreadExecutor()
-                    capture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
-                        override fun onCaptureSuccess(image: ImageProxy) {
-                            val rotationDegrees = image.imageInfo.rotationDegrees
-                            val bitmap = image.toBitmap()
-                            val rotatedBitmap = if (rotationDegrees != 0) {
-                                val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                            } else {
-                                bitmap
-                            }
-                            image.close()
-                            ContextCompat.getMainExecutor(context).execute {
-                                onImageCaptured(rotatedBitmap)
-                            }
-                        }
-
-                        override fun onError(exception: ImageCaptureException) {
-                            exception.printStackTrace()
-                        }
-                    })
-                },
-                modifier = Modifier
-                    .size(76.dp)
-                    .background(Color.White, CircleShape)
-                    .padding(6.dp)
-                    .border(3.dp, Color.Black, CircleShape)
-            ) {
+            // Cancel / Page counter preview
+            if (capturedPages.isNotEmpty()) {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .background(Color(0xFF007AFF), CircleShape)
+                        .size(48.dp)
+                        .background(Color.White.copy(alpha = 0.25f), CircleShape)
+                        .border(1.5.dp, Color.White, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${capturedPages.size}",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.size(48.dp))
+            }
+
+            // Capture Shutter Button
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(
+                    onClick = {
+                        val capture = imageCapture ?: return@IconButton
+                        val executor = Executors.newSingleThreadExecutor()
+                        capture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
+                            override fun onCaptureSuccess(image: ImageProxy) {
+                                val rotationDegrees = image.imageInfo.rotationDegrees
+                                val bitmap = image.toBitmap()
+                                val rotatedBitmap = if (rotationDegrees != 0) {
+                                    val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                                    Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                                } else {
+                                    bitmap
+                                }
+                                image.close()
+                                ContextCompat.getMainExecutor(context).execute {
+                                    capturedPages.add(rotatedBitmap)
+                                }
+                            }
+
+                            override fun onError(exception: ImageCaptureException) {
+                                exception.printStackTrace()
+                            }
+                        })
+                    },
+                    modifier = Modifier
+                        .size(76.dp)
+                        .background(Color.White, CircleShape)
+                        .padding(6.dp)
+                        .border(3.dp, Color.Black, CircleShape)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(Color(0xFF007AFF), CircleShape)
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Tap to Add Page",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = "Tap to Scan Full-Res",
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
-            )
+            // Done / Process Button
+            if (capturedPages.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF34C759))
+                        .clickable {
+                            onImagesCaptured(capturedPages.toList())
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Done (${capturedPages.size})",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.size(48.dp))
+            }
         }
     }
 }

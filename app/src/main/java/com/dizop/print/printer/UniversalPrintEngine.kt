@@ -53,7 +53,8 @@ class UniversalPrintEngine(
                     resourcePath = resourcePath,
                     pdfFile = file,
                     jobName = jobName,
-                    config = config
+                    config = config,
+                    network = networkRouter?.printerWifiNetwork?.value
                 )
                 // STRICT P0 FIX: Never automatically blast the file to raw port 9100 on IPP failure!
                 // Report explicit failure back to caller to prevent duplicate pages.

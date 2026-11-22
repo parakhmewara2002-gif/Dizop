@@ -148,13 +148,17 @@ class WifiDirectPrinterManager(private val context: Context) {
         if (p2pManager == null || channel == null) return
         val config = WifiP2pConfig().apply {
             deviceAddress = device.deviceAddress
+            // Group owner intent: 0 means smartphone is client, printer is group owner (192.168.49.1)
+            groupOwnerIntent = 0
         }
         p2pManager.connect(channel, config, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
+                Log.i("DizopWifiDirect", "P2P connection initiated to ${device.deviceName}")
                 onSuccess()
             }
 
             override fun onFailure(reason: Int) {
+                Log.w("DizopWifiDirect", "P2P connection failed to ${device.deviceName}, code: $reason")
                 onFailure(reason)
             }
         })

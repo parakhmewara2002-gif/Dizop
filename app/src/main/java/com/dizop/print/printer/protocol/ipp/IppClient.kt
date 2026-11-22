@@ -1,5 +1,6 @@
 package com.dizop.print.printer.protocol.ipp
 
+import android.net.Network
 import android.util.Log
 import com.dizop.print.data.InkLevel
 import com.dizop.print.printer.config.ColorMode
@@ -23,7 +24,7 @@ data class IppPrinterAttributes(
     val inkLevels: List<InkLevel> = emptyList()
 )
 
-class IppClient(private val client: OkHttpClient = OkHttpClient.Builder()
+class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
     .connectTimeout(5, TimeUnit.SECONDS)
     .readTimeout(15, TimeUnit.SECONDS)
     .writeTimeout(60, TimeUnit.SECONDS)
@@ -32,9 +33,20 @@ class IppClient(private val client: OkHttpClient = OkHttpClient.Builder()
 
     private val IPP_MEDIA_TYPE = "application/ipp".toMediaType()
 
+    private fun getClientForNetwork(network: Network?): OkHttpClient {
+        return if (network != null) {
+            baseClient.newBuilder()
+                .socketFactory(network.socketFactory)
+                .build()
+        } else {
+            baseClient
+        }
+    }
+
     /**
      * Executes an RFC 8011 IPP Print-Job operation over HTTP/1.1 POST
      * using the dynamically discovered printer endpoint path and user configuration.
+     * Optionally binds to a specific Wi-Fi Network so mobile data never intercepts it.
      */
     fun printDocument(
         printerHost: String,
@@ -42,9 +54,11 @@ class IppClient(private val client: OkHttpClient = OkHttpClient.Builder()
         resourcePath: String,
         pdfFile: File,
         jobName: String,
-        config: PrintJobConfiguration? = null
+        config: PrintJobConfiguration? = null,
+        network: Network? = null
     ): Result<Boolean> {
         return try {
+            val client = getClientForNetwork(network)
             val cleanPath = resourcePath.trimStart('/')
             val printerUri = "ipp://$printerHost:$printerPort/$cleanPath"
             val httpUrl = "http://$printerHost:$printerPort/$cleanPath"
@@ -137,9 +151,11 @@ class IppClient(private val client: OkHttpClient = OkHttpClient.Builder()
     fun queryPrinterAttributes(
         printerHost: String,
         printerPort: Int,
-        resourcePath: String = "ipp/print"
+        resourcePath: String = "ipp/print",
+        network: Network? = null
     ): ParsedIppResponse {
         return try {
+            val client = getClientForNetwork(network)
             val cleanPath = resourcePath.trimStart('/')
             val printerUri = "ipp://$printerHost:$printerPort/$cleanPath"
             val httpUrl = "http://$printerHost:$printerPort/$cleanPath"
