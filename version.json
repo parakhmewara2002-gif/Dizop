@@ -1,7 +1,7 @@
 {
-  "versionCode": 101,
-  "versionName": "1.0.1",
-  "changelog": "Dizop v1.0.1: Full NokoPrint Feature Parity! Multi-Page N-Up Grid (2, 4, 6, 9 per sheet), Poster Mode (2x2, 3x3), Manual Duplex (Front/Odd first), Direct IP Printer Addition, Web Page Printing & Extended Photo Sizes (4x6, 5x7, Passport).",
-  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.1/Dizop.apk",
-  "expectedSha256": "d8e3112965ce99c840a01978e5f3db4ef107d4ec9b583e9edb24b30a904c0cd6"
+  "versionCode": 102,
+  "versionName": "1.0.2",
+  "changelog": "Dizop v1.0.2 Security & Protocol Hardening: Enforced mandatory 64-hex SHA-256 APK integrity checks, DownloadManager status validation, hardened FileProvider path isolation, reliable USB multi-chunk streaming loops, and bitmap memory leak recycling.",
+  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.2/Dizop.apk",
+  "expectedSha256": "ed0a6aba1ee5bb57d29cbe962564d7f32bc813567248631631e01743d638449e"
 }
