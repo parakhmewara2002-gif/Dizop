@@ -16,9 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.dizop.print.ui.theme.IosCardBorder
@@ -26,7 +25,7 @@ import com.dizop.print.ui.theme.IosCardLight
 
 /**
  * iOS-styled card container with fluid spring scale press animations,
- * squircle corners, subtle hairline border, and hardware-accelerated soft depth.
+ * squircle corners, subtle hairline border, and zero-layout GPU graphicsLayer acceleration.
  */
 @Composable
 fun IosCard(
@@ -40,10 +39,10 @@ fun IosCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Ultra-smooth spring scale animation on press
+    // iOS Fluid Spring calibration: Damping 0.82f for soft settle, Stiffness 380f for organic mass-spring response
     val scale by animateFloatAsState(
         targetValue = if (isPressed && onClick != null) 0.965f else 1f,
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = 600f),
+        animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
         label = "cardPressScale"
     )
 
@@ -57,8 +56,10 @@ fun IosCard(
 
     Box(
         modifier = modifier
-            .scale(scale)
-            .shadow(elevation = 1.dp, shape = shape, spotColor = Color(0x0A000000), ambientColor = Color(0x03000000))
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(shape)
             .background(backgroundColor)
             .border(width = 0.5.dp, color = IosCardBorder, shape = shape)
