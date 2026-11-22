@@ -43,18 +43,24 @@ fun IosSegmentedControl(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(36.dp)
+            .height(38.dp)
             .clip(shape)
-            .background(Color(0xFFE5E5EA))
-            .padding(2.dp)
+            .background(Color(0xFFEAEAEE))
+            .padding(3.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             items.forEachIndexed { index, title ->
                 val isSelected = index == selectedIndex
+                val elevation by animateFloatAsState(
+                    targetValue = if (isSelected) 2f else 0f,
+                    animationSpec = spring(stiffness = 500f),
+                    label = "thumbElevation"
+                )
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .shadow(elevation.dp, RoundedCornerShape(8.dp), spotColor = Color(0x1A000000))
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (isSelected) IosCardLight else Color.Transparent)
                         .clickable(
@@ -66,7 +72,7 @@ fun IosSegmentedControl(
                     Text(
                         text = title,
                         fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         color = if (isSelected) IosTextPrimary else IosTextSecondary
                     )
                 }

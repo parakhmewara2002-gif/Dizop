@@ -447,8 +447,12 @@ fun MainDashboardScreen(
             }
 
             // In-App Update Banner
-            if (updateInfo?.hasUpdate == true) {
-                item {
+            item(key = "update_banner") {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = updateInfo?.hasUpdate == true,
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+                    exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+                ) {
                     IosCard(
                         modifier = Modifier.fillMaxWidth(),
                         backgroundColor = IosBlue.copy(alpha = 0.08f),
@@ -473,13 +477,13 @@ fun MainDashboardScreen(
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Update Available (v${updateInfo!!.latestVersionName})",
+                                    text = "Update Available (v${updateInfo?.latestVersionName ?: ""})",
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 15.sp,
                                     color = IosTextPrimary
                                 )
                                 Text(
-                                    text = updateInfo!!.releaseNotes,
+                                    text = updateInfo?.releaseNotes ?: "",
                                     fontSize = 12.sp,
                                     color = IosTextSecondary
                                 )
@@ -501,7 +505,7 @@ fun MainDashboardScreen(
                 }
             }
             // Print Output Mode Selector (Color vs B&W)
-            item {
+            item(key = "color_mode_selector") {
                 IosSegmentedControl(
                     items = listOf("Full HD Color", "Monochrome (B&W)"),
                     selectedIndex = printColorMode,
@@ -845,7 +849,7 @@ fun MainDashboardScreen(
 
 
             // Action Quick-Grid
-            item {
+            item(key = "action_grid") {
                 Text(
                     text = "ACTIONS",
                     fontSize = 12.sp,
@@ -979,7 +983,7 @@ fun MainDashboardScreen(
             }
 
             // Discovered Printers Section
-            item {
+            item(key = "printers_header") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1004,7 +1008,7 @@ fun MainDashboardScreen(
             }
 
             if (printers.isEmpty()) {
-                item {
+                item(key = "empty_printers") {
                     IosCard(
                         modifier = Modifier.fillMaxWidth(),
                         cornerRadius = 20.dp

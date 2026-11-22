@@ -1,7 +1,7 @@
 {
-  "versionCode": 102,
-  "versionName": "1.0.2",
-  "changelog": "Dizop v1.0.2 Security & Protocol Hardening: Enforced mandatory 64-hex SHA-256 APK integrity checks, DownloadManager status validation, hardened FileProvider path isolation, reliable USB multi-chunk streaming loops, and bitmap memory leak recycling.",
-  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.2/Dizop.apk",
-  "expectedSha256": "ed0a6aba1ee5bb57d29cbe962564d7f32bc813567248631631e01743d638449e"
+  "versionCode": 103,
+  "versionName": "1.0.3",
+  "changelog": "Dizop v1.0.3 Fluid UI & Performance Update: Added tactile spring scale press feedback across action cards, animated segmented pill switches, smooth update banner transitions, and explicit LazyColumn item keys eliminating scroll recomposition latency.",
+  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.3/Dizop.apk",
+  "expectedSha256": "f9b3ea198a5610dd64c7780b3044f028672f4d805fee735d0842730cf170d8d6"
 }
