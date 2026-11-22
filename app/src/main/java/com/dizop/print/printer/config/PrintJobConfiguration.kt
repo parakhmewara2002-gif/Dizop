@@ -1,5 +1,7 @@
 package com.dizop.print.printer.config
 
+import androidx.compose.runtime.Immutable
+
 enum class PaperSize(val displayName: String, val widthMm: Float, val heightMm: Float) {
     A4("A4 (210 x 297 mm)", 210f, 297f),
     A3("A3 (297 x 420 mm)", 297f, 420f),
@@ -59,6 +61,7 @@ enum class PagePosition(val displayName: String) {
     BOTTOM_MIDDLE("Bottom Middle")
 }
 
+@Immutable
 data class PrintJobConfiguration(
     val copies: Int = 1,
     val paperSize: PaperSize = PaperSize.A4,

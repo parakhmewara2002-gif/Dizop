@@ -4,9 +4,11 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+@Immutable
 data class PrintHistoryRecord(
     val id: Long = 0,
     val title: String,
@@ -15,6 +17,7 @@ data class PrintHistoryRecord(
     val status: String
 )
 
+@Immutable
 data class SavedPrinterRecord(
     val id: Long = 0,
     val name: String,

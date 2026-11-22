@@ -1,5 +1,7 @@
 package com.dizop.print.data
 
+import androidx.compose.runtime.Immutable
+
 enum class PrinterProtocol {
     IPP,            // Internet Printing Protocol (port 631) - Modern standard
     RAW_JETDIRECT,  // Raw 9100 port - HP, Canon, Brother, Epson
@@ -16,12 +18,14 @@ enum class PrinterBrand {
     GENERIC
 }
 
+@Immutable
 data class InkLevel(
     val colorName: String,
     val levelPercentage: Int, // 0..100
     val colorHex: Long
 )
 
+@Immutable
 data class DiscoveredPrinter(
     val id: String,
     val name: String,
