@@ -113,7 +113,7 @@ class IppClient(private val client: OkHttpClient = OkHttpClient.Builder()
             val response = client.newCall(request).execute()
             if (response.isSuccessful) {
                 val bytes = response.body?.bytes()
-                if (bytes != null) {
+                if (bytes != null && bytes.size >= 8) {
                     val parsed = IppResponseParser.parse(bytes)
                     if (parsed.status == IppResponseStatus.SUCCESS) {
                         return Result.success(true)
@@ -121,7 +121,7 @@ class IppClient(private val client: OkHttpClient = OkHttpClient.Builder()
                         return Result.failure(Exception("IPP Error (0x${Integer.toHexString(parsed.statusCode)}): ${parsed.stateReasons.joinToString()}"))
                     }
                 }
-                Result.success(true)
+                return Result.failure(Exception("Empty or invalid IPP response payload from printer"))
             } else {
                 Result.failure(Exception("HTTP ${response.code}: ${response.message}"))
             }

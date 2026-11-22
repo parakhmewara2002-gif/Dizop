@@ -42,6 +42,7 @@ import com.dizop.print.ui.theme.IosGreen
 data class PrintActivityState(
     val isPrinting: Boolean = false,
     val isComplete: Boolean = false,
+    val statusMessage: String = "",
     val documentTitle: String = "",
     val printerName: String = "",
     val currentPage: Int = 1,
@@ -115,7 +116,7 @@ fun DynamicIslandPill(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Print Complete",
+                            text = if (state.statusMessage.isNotBlank()) state.statusMessage else "Print Complete",
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold

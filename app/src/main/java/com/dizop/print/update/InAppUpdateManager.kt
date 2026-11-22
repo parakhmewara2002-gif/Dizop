@@ -88,10 +88,17 @@ class InAppUpdateManager(private val context: Context) {
     }
 
     /**
-     * Downloads and launches APK package installer with SHA-256 integrity verification
+     * Downloads and launches APK package installer with strictly enforced SHA-256 integrity verification
      */
-    fun startUpdateDownload(apkUrl: String, expectedSha256: String = "") {
+    fun startUpdateDownload(apkUrl: String, expectedSha256: String) {
         if (_isDownloading.value) return
+        
+        // STRICT SECURITY P0 FIX (DIZ-SEC-002): Never allow blank or unverified update downloads
+        if (expectedSha256.isBlank() || expectedSha256.length != 64) {
+            Log.e("InAppUpdate", "Rejected update download: Invalid or missing SHA-256 expected hash")
+            return
+        }
+
         _isDownloading.value = true
 
         val fileName = "DizopUpdate.apk"
@@ -112,16 +119,34 @@ class InAppUpdateManager(private val context: Context) {
                 val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
                 if (id == downloadId) {
                     _isDownloading.value = false
-                    context.unregisterReceiver(this)
+                    try {
+                        context.unregisterReceiver(this)
+                    } catch (_: Exception) {}
 
-                    // Verify APK SHA-256 checksum if provided
-                    if (expectedSha256.isNotBlank()) {
-                        val computed = calculateSha256(destination)
-                        if (!computed.equals(expectedSha256, ignoreCase = true)) {
-                            Log.e("InAppUpdate", "Integrity check failed: $computed != $expectedSha256")
-                            destination.delete()
-                            return
+                    // Verify download status from DownloadManager
+                    val query = DownloadManager.Query().setFilterById(downloadId)
+                    val cursor = downloadManager.query(query)
+                    var downloadSuccessful = false
+                    if (cursor != null && cursor.moveToFirst()) {
+                        val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                        if (statusIndex != -1 && cursor.getInt(statusIndex) == DownloadManager.STATUS_SUCCESSFUL) {
+                            downloadSuccessful = true
                         }
+                    }
+                    cursor?.close()
+
+                    if (!downloadSuccessful || !destination.exists()) {
+                        Log.e("InAppUpdate", "DownloadManager reported failure or missing file")
+                        destination.delete()
+                        return
+                    }
+
+                    // Enforce SHA-256 integrity
+                    val computed = calculateSha256(destination)
+                    if (!computed.equals(expectedSha256, ignoreCase = true)) {
+                        Log.e("InAppUpdate", "Security Integrity check failed: computed=$computed != expected=$expectedSha256")
+                        destination.delete()
+                        return
                     }
 
                     installDownloadedApk(destination)

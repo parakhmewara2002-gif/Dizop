@@ -42,6 +42,7 @@ object SmartPdfTools {
                 val newPage = newDoc.startPage(pageInfo)
                 newPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
                 newDoc.finishPage(newPage)
+                bitmap.recycle()
             }
 
             renderer.close()
@@ -82,6 +83,7 @@ object SmartPdfTools {
                     val newPage = masterDoc.startPage(pageInfo)
                     newPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
                     masterDoc.finishPage(newPage)
+                    bitmap.recycle()
                 }
                 renderer.close()
                 fd.close()
@@ -133,6 +135,7 @@ object SmartPdfTools {
                 }
 
                 newDoc.finishPage(newPage)
+                bitmap.recycle()
             }
 
             renderer.close()

@@ -115,33 +115,28 @@ class UsbPrinterManager(private val context: Context) {
             val connection: UsbDeviceConnection = usbManager.openDevice(device)
                 ?: return@withContext Result.failure(Exception("Could not open USB connection"))
 
-            connection.claimInterface(printInterface, true)
+            try {
+                connection.claimInterface(printInterface, true)
 
-            FileInputStream(file).use { input ->
-                val buffer = ByteArray(4096)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    val transferred = connection.bulkTransfer(outEndpoint, buffer, bytesRead, 5000)
-                    if (transferred < 0) {
-                        connection.releaseInterface(printInterface)
-                        connection.close()
-                        return@withContext Result.failure(Exception("USB bulkTransfer failed with return code $transferred"))
-                    } else if (transferred < bytesRead) {
-                        // Partial transfer handling
-                        val remaining = bytesRead - transferred
-                        val retryTransfer = connection.bulkTransfer(outEndpoint, buffer.copyOfRange(transferred, bytesRead), remaining, 5000)
-                        if (retryTransfer < 0) {
-                            connection.releaseInterface(printInterface)
-                            connection.close()
-                            return@withContext Result.failure(Exception("USB partial transfer retry failed"))
+                FileInputStream(file).use { input ->
+                    val buffer = ByteArray(4096)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        var offset = 0
+                        while (offset < bytesRead) {
+                            val transferred = connection.bulkTransfer(outEndpoint, buffer, offset, bytesRead - offset, 5000)
+                            if (transferred <= 0) {
+                                return@withContext Result.failure(Exception("USB bulkTransfer failed or timed out: code $transferred"))
+                            }
+                            offset += transferred
                         }
                     }
                 }
+                Result.success(true)
+            } finally {
+                try { connection.releaseInterface(printInterface) } catch (_: Exception) {}
+                try { connection.close() } catch (_: Exception) {}
             }
-
-            connection.releaseInterface(printInterface)
-            connection.close()
-            Result.success(true)
         } catch (e: Exception) {
             Log.e("DizopUsb", "USB print error", e)
             Result.failure(e)
@@ -149,11 +144,16 @@ class UsbPrinterManager(private val context: Context) {
     }
 
     private fun requestUsbPermission(device: UsbDevice) {
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+        val intent = Intent(ACTION_USB_PERMISSION).setPackage(context.packageName)
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_MUTABLE
+        } else {
+            0
+        }
         val permissionIntent = PendingIntent.getBroadcast(
             context,
             0,
-            Intent(ACTION_USB_PERMISSION),
+            intent,
             flags
         )
         usbManager.requestPermission(device, permissionIntent)

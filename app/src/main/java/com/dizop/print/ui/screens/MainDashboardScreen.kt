@@ -180,7 +180,11 @@ fun MainDashboardScreen(
             val result = printEngine.printDocument(selectedPrinter, fileToPrint, title, config)
             if (result.isSuccess) {
                 HapticFeedbackHelper.performSuccess(context)
-                dynamicIslandState = PrintActivityState(isComplete = true)
+                val isDirectHardwareSpool = selectedPrinter != null
+                dynamicIslandState = PrintActivityState(
+                    statusMessage = if (isDirectHardwareSpool) "Sent to Printer" else "Print Spooled",
+                    isComplete = true
+                )
                 delay(2400)
                 dynamicIslandState = PrintActivityState()
             } else {
