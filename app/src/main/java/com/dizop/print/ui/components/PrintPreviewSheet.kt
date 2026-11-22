@@ -85,7 +85,6 @@ fun PrintPreviewSheet(
     var currentPageIndex by remember { mutableStateOf(0) }
     var totalPages by remember { mutableStateOf(1) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    val sheetScroll = rememberScrollState()
 
     LaunchedEffect(pdfFile, currentPageIndex) {
         withContext(Dispatchers.IO) {
@@ -113,9 +112,7 @@ fun PrintPreviewSheet(
         cornerRadius = 24.dp
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(sheetScroll)
+            modifier = Modifier.fillMaxWidth()
         ) {
             // Header
             Row(

@@ -1,7 +1,7 @@
 {
-  "versionCode": 103,
-  "versionName": "1.0.3",
-  "changelog": "Dizop v1.0.3 Fluid UI & Performance Update: Added tactile spring scale press feedback across action cards, animated segmented pill switches, smooth update banner transitions, and explicit LazyColumn item keys eliminating scroll recomposition latency.",
-  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.3/Dizop.apk",
-  "expectedSha256": "f9b3ea198a5610dd64c7780b3044f028672f4d805fee735d0842730cf170d8d6"
+  "versionCode": 104,
+  "versionName": "1.0.4",
+  "changelog": "Dizop v1.0.4 Critical Fix: Resolved Compose nested scroll crash (IllegalStateException infinity height constraint) in PrintPreviewSheet during photo/document selection, added PageLayoutConfiguration test suite, and verified real-device printing spool pipeline.",
+  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.4/Dizop.apk",
+  "expectedSha256": "ddcd9bf36cb2dd46deb3fd211f28816ec1c7b04983f8991a5e92030b96e351f8"
 }
