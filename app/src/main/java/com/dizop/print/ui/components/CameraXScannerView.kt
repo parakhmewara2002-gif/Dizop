@@ -40,6 +40,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -121,7 +127,8 @@ fun CameraXScannerView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 20.dp, start = 20.dp, end = 20.dp),
+                .padding(WindowInsets.statusBars.asPaddingValues())
+                .padding(top = 10.dp, start = 20.dp, end = 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -154,12 +161,13 @@ fun CameraXScannerView(
             }
         }
 
-        // Bottom Controls: Done Button + Shutter + Batch Counter
+        // Bottom Controls: Done Button + Shutter + Batch Counter (with Navigation Bar Inset Safety)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 36.dp, start = 24.dp, end = 24.dp),
+                .padding(WindowInsets.navigationBars.asPaddingValues())
+                .padding(bottom = 24.dp, start = 24.dp, end = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

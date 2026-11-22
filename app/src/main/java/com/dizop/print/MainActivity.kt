@@ -31,9 +31,6 @@ class MainActivity : ComponentActivity() {
         printEngine = UniversalPrintEngine(this, dualNetworkRouter)
         updateManager = InAppUpdateManager(this)
 
-        // Instant discovery start
-        printerDiscovery.startDiscovery()
-
         setContent {
             DizopTheme {
                 MainDashboardScreen(
@@ -42,6 +39,11 @@ class MainActivity : ComponentActivity() {
                     updateManager = updateManager
                 )
             }
+        }
+
+        // Defer discovery start to background thread after first frame composition
+        window.decorView.post {
+            printerDiscovery.startDiscovery()
         }
     }
 
