@@ -46,12 +46,14 @@ import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Usb
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -138,6 +140,10 @@ fun MainDashboardScreen(
     var showWebPrintDialog by remember { mutableStateOf(false) }
     var webUrlInput by remember { mutableStateOf("https://") }
 
+    // QR Badge Print Dialog State
+    var showQrPrintDialog by remember { mutableStateOf(false) }
+    var qrContentInput by remember { mutableStateOf("https://dizop.app") }
+
     val updateInfo by updateManager.updateState.collectAsState()
     val isDownloadingUpdate by updateManager.isDownloading.collectAsState()
 
@@ -163,7 +169,8 @@ fun MainDashboardScreen(
             )
 
             // Apply N-Up, Poster, Margin & Duplex Page Layout transformations if necessary
-            val fileToPrint = if (config != null && (
+            var currentWorkingFile = file
+            if (config != null && (
                 config.pagesPerSheet != com.dizop.print.printer.config.PagesPerSheet.ONE ||
                 config.posterMode != com.dizop.print.printer.config.PosterMode.NONE ||
                 config.duplexMode == com.dizop.print.printer.config.DuplexMode.MANUAL_ODD_ONLY ||
@@ -171,11 +178,24 @@ fun MainDashboardScreen(
                 config.margins != com.dizop.print.printer.config.PageMargins.NORMAL
             )) {
                 val transformedPdf = File(context.cacheDir, "dizop_transformed_layout_${System.currentTimeMillis()}.pdf")
-                val success = com.dizop.print.printer.layout.PageLayoutProcessor.processPdfLayout(file, transformedPdf, config)
-                if (success) transformedPdf else file
-            } else {
-                file
+                val success = com.dizop.print.printer.layout.PageLayoutProcessor.processPdfLayout(currentWorkingFile, transformedPdf, config)
+                if (success) currentWorkingFile = transformedPdf
             }
+
+            // Apply DocScanner Tools (Watermark & Page Numbering) if requested
+            if (config != null && config.watermarkText.isNotEmpty()) {
+                val watermarkedPdf = File(context.cacheDir, "dizop_watermarked_${System.currentTimeMillis()}.pdf")
+                val watermarkRes = com.dizop.print.pdf.AdvancedPdfEngine.addWatermark(currentWorkingFile, watermarkedPdf, config.watermarkText)
+                if (watermarkRes.isSuccess) currentWorkingFile = watermarkedPdf
+            }
+
+            if (config != null && config.addPageNumbers) {
+                val numberedPdf = File(context.cacheDir, "dizop_numbered_${System.currentTimeMillis()}.pdf")
+                val numberedRes = com.dizop.print.pdf.AdvancedPdfEngine.addPageNumbers(currentWorkingFile, numberedPdf)
+                if (numberedRes.isSuccess) currentWorkingFile = numberedPdf
+            }
+
+            val fileToPrint = currentWorkingFile
 
             val result = printEngine.printDocument(selectedPrinter, fileToPrint, title, config)
             if (result.isSuccess) {
@@ -203,11 +223,8 @@ fun MainDashboardScreen(
                 try {
                     val inputStream = context.contentResolver.openInputStream(uri)
                     val bitmap = BitmapFactory.decodeStream(inputStream)
-                    val processed = SmartDocumentProcessor.processDocumentScan(
-                        bitmap,
-                        highContrast = (printColorMode == 1),
-                        removeShadows = true
-                    )
+                    val filter = if (printColorMode == 1) com.dizop.print.scanner.DocScannerFilter.DOCUMENT_BW else com.dizop.print.scanner.DocScannerFilter.MAGIC_COLOR
+                    val processed = com.dizop.print.scanner.DocumentFilterEngine.applyFilter(bitmap, filter)
                     val tempPdf = File(context.cacheDir, "dizop_photo.pdf")
                     SmartDocumentProcessor.createPdfFromBitmaps(listOf(processed), tempPdf)
                     triggerPrint(tempPdf, "HD Photo")
@@ -292,11 +309,8 @@ fun MainDashboardScreen(
         if (bitmap != null) {
             coroutineScope.launch {
                 try {
-                    val scannedDoc = SmartDocumentProcessor.processDocumentScan(
-                        bitmap,
-                        highContrast = true,
-                        removeShadows = true
-                    )
+                    val filter = if (printColorMode == 1) com.dizop.print.scanner.DocScannerFilter.DOCUMENT_BW else com.dizop.print.scanner.DocScannerFilter.MAGIC_COLOR
+                    val scannedDoc = com.dizop.print.scanner.DocumentFilterEngine.applyFilter(bitmap, filter)
                     val tempPdf = File(context.cacheDir, "smart_scan.pdf")
                     SmartDocumentProcessor.createPdfFromBitmaps(listOf(scannedDoc), tempPdf)
                     triggerPrint(tempPdf, "AI Smart Scan")
@@ -678,6 +692,71 @@ fun MainDashboardScreen(
                 }
             }
 
+            // QR / Barcode Badge Printer Modal
+            if (showQrPrintDialog) {
+                item {
+                    IosCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 20.dp
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Print QR Badge / Barcode",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = IosTextPrimary
+                                )
+                                IconButton(onClick = { showQrPrintDialog = false }) {
+                                    Icon(Icons.Rounded.Close, contentDescription = "Close")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = qrContentInput,
+                                onValueChange = { qrContentInput = it },
+                                label = { Text("QR Text / Link / Wi-Fi Details") },
+                                placeholder = { Text("WIFI:S:MyNetwork;T:WPA;P:MyPassword;;") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Button(
+                                onClick = {
+                                    val content = qrContentInput.trim()
+                                    if (content.isNotEmpty()) {
+                                        showQrPrintDialog = false
+                                        coroutineScope.launch {
+                                            val qrResult = com.dizop.print.qr.QrBarcodeEngine.generateQrBitmap(content, 600, 600)
+                                            if (qrResult.isSuccess) {
+                                                val qrBmp = qrResult.getOrThrow()
+                                                val tempPdf = File(context.cacheDir, "dizop_qr_badge_${System.currentTimeMillis()}.pdf")
+                                                SmartDocumentProcessor.createPdfFromBitmaps(listOf(qrBmp), tempPdf)
+                                                HapticFeedbackHelper.performSuccess(context)
+                                                triggerPrint(tempPdf, "QR Badge - $content")
+                                            } else {
+                                                Toast.makeText(context, "Failed to create QR: ${qrResult.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = IosIndigo)
+                            ) {
+                                Icon(Icons.Rounded.QrCode2, contentDescription = null, tint = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Generate & Print QR Badge", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Digital Signature Modal
             if (showSignatureDialog && pendingPdfToSign != null) {
                 item {
@@ -979,6 +1058,27 @@ fun MainDashboardScreen(
                             showManualPrinterDialog = true
                         }
                     )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ActionTile(
+                        modifier = Modifier.weight(1f),
+                        title = "QR / Barcode",
+                        subtitle = "Generate & Print Badge",
+                        icon = Icons.Rounded.QrCode2,
+                        iconBackground = IosIndigo,
+                        onClick = {
+                            HapticFeedbackHelper.performClick(context)
+                            showQrPrintDialog = true
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
 

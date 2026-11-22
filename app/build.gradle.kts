@@ -12,8 +12,8 @@ android {
         applicationId = "com.dizop.print"
         minSdk = 26
         targetSdk = 35
-        versionCode = 104
-        versionName = "1.0.4"
+        versionCode = 105
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -74,6 +74,9 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+
+    // ZXing for QR Scanner & Badge Generation
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

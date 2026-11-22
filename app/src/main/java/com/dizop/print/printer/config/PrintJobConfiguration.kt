@@ -72,5 +72,7 @@ data class PrintJobConfiguration(
     val printBorderLines: Boolean = false,
     val collateCopies: Boolean = true,
     val pageRange: String = "All", // e.g. "All", "1-3", "1, 3, 5"
-    val isLandscape: Boolean = false
+    val isLandscape: Boolean = false,
+    val watermarkText: String = "",
+    val addPageNumbers: Boolean = false
 )

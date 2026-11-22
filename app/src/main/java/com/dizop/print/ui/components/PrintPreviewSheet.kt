@@ -48,6 +48,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import com.dizop.print.ui.theme.IosBlue
+import com.dizop.print.ui.theme.IosGreen
+import com.dizop.print.ui.theme.IosOrange
+import com.dizop.print.ui.theme.IosTextPrimary
+import com.dizop.print.ui.theme.IosTextSecondary
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -363,6 +368,40 @@ fun PrintPreviewSheet(
                         )
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Doc Scanner Features: Watermark & Page Numbering
+            Text("Document Tools (Watermark & Numbers)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = IosTextSecondary)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FilterChip(
+                    selected = config.watermarkText.isNotEmpty(),
+                    onClick = {
+                        config = config.copy(
+                            watermarkText = if (config.watermarkText.isEmpty()) "CONFIDENTIAL" else ""
+                        )
+                    },
+                    label = { Text(if (config.watermarkText.isEmpty()) "+ Add Watermark" else "Watermark: ${config.watermarkText}", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = IosOrange.copy(alpha = 0.15f),
+                        selectedLabelColor = IosOrange
+                    )
+                )
+
+                FilterChip(
+                    selected = config.addPageNumbers,
+                    onClick = { config = config.copy(addPageNumbers = !config.addPageNumbers) },
+                    label = { Text(if (config.addPageNumbers) "✓ Page Numbers Added" else "+ Page Numbers", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = IosGreen.copy(alpha = 0.15f),
+                        selectedLabelColor = IosGreen
+                    )
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))

@@ -1,7 +1,7 @@
 {
-  "versionCode": 104,
-  "versionName": "1.0.4",
-  "changelog": "Dizop v1.0.4 Critical Fix: Resolved Compose nested scroll crash (IllegalStateException infinity height constraint) in PrintPreviewSheet during photo/document selection, added PageLayoutConfiguration test suite, and verified real-device printing spool pipeline.",
-  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.4/Dizop.apk",
-  "expectedSha256": "ddcd9bf36cb2dd46deb3fd211f28816ec1c7b04983f8991a5e92030b96e351f8"
+  "versionCode": 105,
+  "versionName": "1.0.5",
+  "changelog": "Dizop v1.0.5 DocScanner Integration: Integrated calibrated document filters (Magic Color, B&W Photocopy, Vibrant, Grayscale), full diagonal PDF Watermarking ('CONFIDENTIAL' / Custom), automated PDF page numbering ('- 1 / N -'), and instant high-contrast QR / Barcode badge printing.",
+  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.5/Dizop.apk",
+  "expectedSha256": "2ed4f46a22fd9dde137bd8c276c0c438d9dcb6595f894ccfaafb77da2e94501f"
 }
