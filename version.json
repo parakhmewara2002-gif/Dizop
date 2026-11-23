@@ -1,7 +1,7 @@
 {
-  "versionCode": 111,
-  "versionName": "1.0.11",
-  "changelog": "ci: auto-publish release and update version.json for in-app updates",
-  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.11/Dizop.apk",
-  "expectedSha256": "f0e2f557d9e5cfef060494a2513ce64de07d08055fab09743f433a8f57cd1ae7"
+  "versionCode": 112,
+  "versionName": "1.0.12",
+  "changelog": "v1.0.12: fix printer protocol detection (LPD port 515 was used as IPP), probe IPP on 631, prefer IPP over raw 9100",
+  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.12/Dizop.apk",
+  "expectedSha256": "cbc4075a019af42c990e7583be052a10e5a0f09e95370b11552dc2fa90c66ac9"
 }
