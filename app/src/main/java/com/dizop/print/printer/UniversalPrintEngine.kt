@@ -47,15 +47,43 @@ class UniversalPrintEngine(
                 // Real RFC 8011 IPP 2.0 execution with dynamic endpoint and print options
                 val port = if (printer.port > 0) printer.port else 631
                 val resourcePath = printer.resourcePath.ifBlank { "ipp/print" }
-                val ippResult = ippClient.printDocument(
-                    printerHost = printer.hostAddress,
-                    printerPort = port,
-                    resourcePath = resourcePath,
-                    pdfFile = file,
-                    jobName = jobName,
-                    config = config,
-                    network = networkRouter?.printerWifiNetwork?.value
-                )
+                val network = networkRouter?.printerWifiNetwork?.value
+
+                // Many laser printers (e.g. HP Laser MFP 1188w) reject application/pdf with IPP 0x040a.
+                // Ask what the printer accepts and fall back to PWG raster when PDF is not supported.
+                val caps = ippClient.queryPrinterAttributes(printer.hostAddress, port, resourcePath, network)
+                val formats = caps.supportedFormats.map { it.lowercase() }
+                var payload = file
+                var format = "application/pdf"
+                var rasterFile: File? = null
+                if (caps.status == com.dizop.print.printer.protocol.ipp.IppResponseStatus.SUCCESS &&
+                    formats.isNotEmpty() && "application/pdf" !in formats
+                ) {
+                    if ("image/pwg-raster" in formats) {
+                        rasterFile = File(context.cacheDir, "dizop_raster_${System.nanoTime()}.pwg")
+                        com.dizop.print.printer.raster.PwgRasterEncoder.encodePdfToFile(file, rasterFile, 300)
+                        payload = rasterFile
+                        format = "image/pwg-raster"
+                    } else {
+                        return@withContext Result.failure(
+                            Exception("Printer PDF/PWG support nahi karta. Supported: ${formats.joinToString()}")
+                        )
+                    }
+                }
+                val ippResult = try {
+                    ippClient.printDocument(
+                        printerHost = printer.hostAddress,
+                        printerPort = port,
+                        resourcePath = resourcePath,
+                        pdfFile = payload,
+                        jobName = jobName,
+                        config = config,
+                        network = network,
+                        documentFormat = format
+                    )
+                } finally {
+                    rasterFile?.delete()
+                }
                 // STRICT P0 FIX: Never automatically blast the file to raw port 9100 on IPP failure!
                 // Report explicit failure back to caller to prevent duplicate pages.
                 return@withContext ippResult

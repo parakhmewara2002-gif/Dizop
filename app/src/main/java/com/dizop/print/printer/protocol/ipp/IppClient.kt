@@ -59,7 +59,8 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
         pdfFile: File,
         jobName: String,
         config: PrintJobConfiguration? = null,
-        network: Network? = null
+        network: Network? = null,
+        documentFormat: String = "application/pdf"
     ): Result<Boolean> {
         return try {
             val client = getClientForNetwork(network)
@@ -95,7 +96,7 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
             val headerBytes = IppPacketEncoder.createPrintJobHeader(
                 printerUri = printerUri,
                 jobName = jobName,
-                documentFormat = "application/pdf",
+                documentFormat = documentFormat,
                 copies = config?.copies ?: 1,
                 paperSizeKeyword = paperKeyword,
                 duplexKeyword = duplexKeyword,
@@ -143,7 +144,7 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
                         if (parsed.status == IppResponseStatus.SUCCESS) {
                             Result.success(true)
                         } else if (parsed.statusCode == 0x040A) {
-                            Result.failure(Exception("Printer PDF format support nahi karta (IPP 0x040a: document-format-not-supported). Is printer ko raster (PWG/URF) data chahiye."))
+                            Result.failure(Exception("Printer ne document format reject kiya (IPP 0x040a: document-format-not-supported): $documentFormat"))
                         } else {
                             Result.failure(Exception("IPP Error (0x${Integer.toHexString(parsed.statusCode)}): ${parsed.stateReasons.joinToString()}"))
                         }
