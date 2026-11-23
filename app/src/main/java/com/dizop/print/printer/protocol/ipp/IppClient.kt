@@ -33,6 +33,10 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
 
     private val IPP_MEDIA_TYPE = "application/ipp".toMediaType()
 
+    // IPP request-id must be unique per request (RFC 8011); hardcoded 1/2 made responses indistinguishable
+    private val requestCounter = java.util.concurrent.atomic.AtomicInteger(0)
+    private fun nextRequestId(): Int = (requestCounter.incrementAndGet() and 0x7FFFFFFF).coerceAtLeast(1)
+
     private fun getClientForNetwork(network: Network?): OkHttpClient {
         return if (network != null) {
             baseClient.newBuilder()
@@ -87,6 +91,7 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
                 else -> "color"
             }
 
+            val requestId = nextRequestId()
             val headerBytes = IppPacketEncoder.createPrintJobHeader(
                 printerUri = printerUri,
                 jobName = jobName,
@@ -94,12 +99,8 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
                 copies = config?.copies ?: 1,
                 paperSizeKeyword = paperKeyword,
                 duplexKeyword = duplexKeyword,
-                colorModeKeyword = colorKeyword
-            )
-
-            val combinedStream = SequenceInputStream(
-                ByteArrayInputStream(headerBytes),
-                FileInputStream(pdfFile)
+                colorModeKeyword = colorKeyword,
+                requestId = requestId
             )
 
             val totalLength = headerBytes.size.toLong() + pdfFile.length()
@@ -107,10 +108,16 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
             val requestBody = object : okhttp3.RequestBody() {
                 override fun contentType() = IPP_MEDIA_TYPE
                 override fun contentLength() = totalLength
+                // The stream is opened inside writeTo (not once up front) and the body is one-shot,
+                // so OkHttp never tries to replay an already-consumed stream on a retry/redirect.
+                override fun isOneShot() = true
                 override fun writeTo(sink: okio.BufferedSink) {
                     val buffer = ByteArray(8192)
                     var read: Int
-                    combinedStream.use { stream ->
+                    SequenceInputStream(
+                        ByteArrayInputStream(headerBytes),
+                        FileInputStream(pdfFile)
+                    ).use { stream ->
                         while (stream.read(buffer).also { read = it } != -1) {
                             sink.write(buffer, 0, read)
                         }
@@ -124,20 +131,28 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
                 .addHeader("User-Agent", "Dizop/1.0 (Android)")
                 .build()
 
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val bytes = response.body?.bytes()
-                if (bytes != null && bytes.size >= 8) {
-                    val parsed = IppResponseParser.parse(bytes)
-                    if (parsed.status == IppResponseStatus.SUCCESS) {
-                        return Result.success(true)
+            // use{} closes the response so the connection is returned to the pool on every path
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val bytes = response.body?.bytes()
+                    if (bytes != null && bytes.size >= 8) {
+                        val parsed = IppResponseParser.parse(bytes)
+                        if (parsed.requestId != requestId) {
+                            Log.w("IppClient", "IPP request-id mismatch: sent $requestId, got ${parsed.requestId}")
+                        }
+                        if (parsed.status == IppResponseStatus.SUCCESS) {
+                            Result.success(true)
+                        } else if (parsed.statusCode == 0x040A) {
+                            Result.failure(Exception("Printer PDF format support nahi karta (IPP 0x040a: document-format-not-supported). Is printer ko raster (PWG/URF) data chahiye."))
+                        } else {
+                            Result.failure(Exception("IPP Error (0x${Integer.toHexString(parsed.statusCode)}): ${parsed.stateReasons.joinToString()}"))
+                        }
                     } else {
-                        return Result.failure(Exception("IPP Error (0x${Integer.toHexString(parsed.statusCode)}): ${parsed.stateReasons.joinToString()}"))
+                        Result.failure(Exception("Empty or invalid IPP response payload from printer"))
                     }
+                } else {
+                    Result.failure(Exception("HTTP ${response.code}: ${response.message}"))
                 }
-                return Result.failure(Exception("Empty or invalid IPP response payload from printer"))
-            } else {
-                Result.failure(Exception("HTTP ${response.code}: ${response.message}"))
             }
         } catch (e: Exception) {
             Log.e("IppClient", "IPP Print error", e)
@@ -160,13 +175,13 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
             val printerUri = "ipp://$printerHost:$printerPort/$cleanPath"
             val httpUrl = "http://$printerHost:$printerPort/$cleanPath"
 
-            val packet = IppPacketEncoder.createGetPrinterAttributesPacket(printerUri)
+            val packet = IppPacketEncoder.createGetPrinterAttributesPacket(printerUri, nextRequestId())
             val request = Request.Builder()
                 .url(httpUrl)
                 .post(packet.toRequestBody(IPP_MEDIA_TYPE))
                 .build()
 
-            val response = client.newCall(request).execute()
+            client.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 val bytes = response.body?.bytes()
                 if (bytes != null) {
@@ -200,6 +215,7 @@ class IppClient(private val baseClient: OkHttpClient = OkHttpClient.Builder()
                     supportedMedia = emptyList(),
                     supportedSides = emptyList()
                 )
+            }
             }
         } catch (e: Exception) {
             Log.d("IppClient", "Query attributes unavailable for $printerHost: ${e.message}")

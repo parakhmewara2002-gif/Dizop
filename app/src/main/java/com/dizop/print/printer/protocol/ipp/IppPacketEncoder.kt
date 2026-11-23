@@ -55,9 +55,18 @@ object IppPacketEncoder {
         writeAttribute(dos, VALUE_NATURAL_LANG, "attributes-natural-language", "en-us")
         writeAttribute(dos, VALUE_URI, "printer-uri", printerUri)
         writeAttribute(dos, VALUE_KEYWORD, "requested-attributes", "marker-levels")
-        writeAttribute(dos, VALUE_KEYWORD, "", "marker-names")
-        writeAttribute(dos, VALUE_KEYWORD, "", "printer-state")
-        writeAttribute(dos, VALUE_KEYWORD, "", "printer-state-reasons")
+        // Additional values of a multi-valued attribute carry an empty name (RFC 8010)
+        listOf(
+            "marker-names",
+            "marker-types",
+            "printer-state",
+            "printer-state-reasons",
+            "printer-is-accepting-jobs",
+            "printer-make-and-model",
+            "document-format-supported",
+            "media-supported",
+            "sides-supported"
+        ).forEach { writeAttribute(dos, VALUE_KEYWORD, "", it) }
 
         // End of Attributes Tag
         dos.writeByte(TAG_END_OF_ATTRIBUTES.toInt())

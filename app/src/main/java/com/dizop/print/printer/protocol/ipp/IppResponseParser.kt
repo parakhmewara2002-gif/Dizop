@@ -75,12 +75,14 @@ object IppResponseParser {
             val supportedSides = mutableListOf<String>()
 
             // Attribute parsing loop
+            var lastName = ""
             while (dis.available() > 0) {
                 val tag = dis.readByte().toInt()
                 if (tag == 0x03) { // End-of-attributes tag
                     break
                 }
                 if (tag in 0x01..0x0F) { // Delimiter tags (operation, printer, job attrs)
+                    lastName = ""
                     continue
                 }
 
@@ -91,6 +93,10 @@ object IppResponseParser {
                     dis.readFully(nameBytes)
                     String(nameBytes, StandardCharsets.UTF_8)
                 } else ""
+
+                // Additional values of a multi-valued attribute arrive with an empty name
+                if (name.isNotEmpty()) lastName = name
+                val attrName = if (name.isNotEmpty()) name else lastName
 
                 // Read Value
                 val valueLength = dis.readUnsignedShort()
@@ -104,28 +110,28 @@ object IppResponseParser {
                             DataInputStream(ByteArrayInputStream(valueBytes)).readInt()
                         } else 0
 
-                        if (name == "printer-state") {
+                        if (attrName == "printer-state") {
                             printerState = when (intVal) {
                                 3 -> "idle"
                                 4 -> "processing"
                                 5 -> "stopped"
                                 else -> "unknown"
                             }
-                        } else if (name == "marker-levels" || name.isEmpty() && markerLevels.isNotEmpty()) {
+                        } else if (attrName == "marker-levels") {
                             markerLevels.add(intVal)
                         }
                     }
                     // Boolean (0x22)
                     0x22 -> {
                         val boolVal = valueBytes.isNotEmpty() && valueBytes[0].toInt() != 0
-                        if (name == "printer-is-accepting-jobs") {
+                        if (attrName == "printer-is-accepting-jobs") {
                             isAcceptingJobs = boolVal
                         }
                     }
                     // Text / Name / Keyword / URI / MIME types (0x41..0x49)
                     in 0x41..0x49 -> {
                         val strVal = String(valueBytes, StandardCharsets.UTF_8)
-                        when (name) {
+                        when (attrName) {
                             "printer-make-and-model" -> makeAndModel = strVal
                             "printer-state-reasons" -> stateReasons.add(strVal)
                             "marker-names" -> markerNames.add(strVal)
@@ -143,6 +149,8 @@ object IppResponseParser {
             if (markerNames.isNotEmpty() && markerLevels.isNotEmpty()) {
                 val count = minOf(markerNames.size, markerLevels.size)
                 for (i in 0 until count) {
+                    // RFC 8011: -1 other, -2 unknown, -3 unknown-but-not-empty: not a real 0% reading
+                    if (markerLevels[i] < 0) continue
                     val rawName = markerNames[i].lowercase()
                     val level = markerLevels[i].coerceIn(0, 100)
                     val colorHex = when {

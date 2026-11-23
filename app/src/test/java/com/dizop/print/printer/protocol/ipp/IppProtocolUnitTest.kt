@@ -60,4 +60,36 @@ class IppProtocolUnitTest {
         assertEquals(0, parsed.statusCode)
         assertEquals(1, parsed.requestId)
     }
+
+    private fun attr(out: java.io.ByteArrayOutputStream, tag: Int, name: String, value: ByteArray) {
+        val d = java.io.DataOutputStream(out)
+        d.writeByte(tag)
+        d.writeShort(name.length)
+        d.writeBytes(name)
+        d.writeShort(value.size)
+        d.write(value)
+    }
+
+    private fun int4(v: Int) = java.nio.ByteBuffer.allocate(4).putInt(v).array()
+
+    @Test
+    fun testMultiValuedMarkersAndUnknownLevels() {
+        val out = java.io.ByteArrayOutputStream()
+        val d = java.io.DataOutputStream(out)
+        d.writeShort(0x0200); d.writeShort(0x0000); d.writeInt(7)
+        d.writeByte(0x04) // printer-attributes group
+        attr(out, 0x42, "marker-names", "Black".toByteArray())
+        attr(out, 0x42, "", "Cyan".toByteArray())      // additional value, empty name
+        attr(out, 0x21, "marker-levels", int4(80))
+        attr(out, 0x21, "", int4(-2))                   // -2 = unknown, must not show as 0%
+        d.writeByte(0x03)
+
+        val parsed = IppResponseParser.parse(out.toByteArray())
+
+        assertEquals(IppResponseStatus.SUCCESS, parsed.status)
+        assertEquals(7, parsed.requestId)
+        assertEquals(1, parsed.inkLevels.size)
+        assertEquals("Black", parsed.inkLevels[0].colorName)
+        assertEquals(80, parsed.inkLevels[0].levelPercentage)
+    }
 }

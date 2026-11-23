@@ -32,7 +32,7 @@ class UniversalPrinterDiscovery(
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
     private var multicastLock: WifiManager.MulticastLock? = null
-    private var discoveryListener: NsdManager.DiscoveryListener? = null
+    private val activeListeners = java.util.concurrent.CopyOnWriteArrayList<NsdManager.DiscoveryListener>()
 
     fun startDiscovery() {
         if (_isScanning.value) return
@@ -81,97 +81,97 @@ class UniversalPrinterDiscovery(
             Log.w("DizopDiscovery", "Could not acquire MulticastLock", e)
         }
 
-        discoveryListener = object : NsdManager.DiscoveryListener {
-            override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {
-                Log.e("DizopDiscovery", "Start discovery failed: $errorCode")
-                _isScanning.value = false
-            }
-
-            override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) {
-                _isScanning.value = false
-            }
-
-            override fun onDiscoveryStarted(serviceType: String?) {
-                Log.i("DizopDiscovery", "Discovery started for $serviceType")
-            }
-
-            override fun onDiscoveryStopped(serviceType: String?) {
-                _isScanning.value = false
-            }
-
-            override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                Log.i("DizopDiscovery", "Service found: ${serviceInfo.serviceName}")
-                try {
-                    nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-                        override fun onResolveFailed(info: NsdServiceInfo?, errorCode: Int) {
-                            Log.w("DizopDiscovery", "Resolve failed: $errorCode")
-                        }
-
-                        override fun onServiceResolved(resolvedInfo: NsdServiceInfo) {
-                            handleResolvedPrinter(resolvedInfo)
-                        }
-                    })
-                } catch (e: Exception) {
-                    Log.e("DizopDiscovery", "Resolve exception", e)
-                }
-            }
-
-            override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                val current = _printers.value.toMutableList()
-                current.removeAll { it.name == serviceInfo.serviceName }
-                _printers.value = current
+        // One DiscoveryListener per DNS-SD service type. All resolves go through a single
+        // serialized queue, because overlapping NsdManager.resolveService() calls fail with
+        // FAILURE_ALREADY_ACTIVE and the printer is then silently never resolved.
+        val serviceTypes = listOf("_ipp._tcp", "_printer._tcp", "_pdl-datastream._tcp")
+        serviceTypes.forEach { type ->
+            val listener = createListener(type)
+            activeListeners.add(listener)
+            try {
+                nsdManager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener)
+            } catch (e: Exception) {
+                Log.e("DizopDiscovery", "Error starting discovery for $type", e)
+                activeListeners.remove(listener)
             }
         }
+        if (activeListeners.isEmpty()) _isScanning.value = false
+    }
 
+    private fun createListener(serviceType: String) = object : NsdManager.DiscoveryListener {
+        override fun onStartDiscoveryFailed(type: String?, errorCode: Int) {
+            Log.e("DizopDiscovery", "Start discovery failed for $serviceType: $errorCode")
+            activeListeners.remove(this)
+            if (activeListeners.isEmpty()) _isScanning.value = false
+        }
+
+        override fun onStopDiscoveryFailed(type: String?, errorCode: Int) {
+            activeListeners.remove(this)
+        }
+
+        override fun onDiscoveryStarted(type: String?) {
+            Log.i("DizopDiscovery", "Discovery started for $type")
+        }
+
+        override fun onDiscoveryStopped(type: String?) {
+            activeListeners.remove(this)
+            if (activeListeners.isEmpty()) _isScanning.value = false
+        }
+
+        override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+            Log.i("DizopDiscovery", "Service found: ${serviceInfo.serviceName} ($serviceType)")
+            enqueueResolve(serviceInfo)
+        }
+
+        override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+            // Printers are stored with the raw mDNS service name in `model`
+            // (`name` has underscores replaced), so match on that.
+            _printers.update { list -> list.filterNot { it.model == serviceInfo.serviceName } }
+        }
+    }
+
+    private val resolveQueue = java.util.ArrayDeque<NsdServiceInfo>()
+    private var resolving = false
+
+    @Synchronized
+    private fun enqueueResolve(info: NsdServiceInfo) {
+        resolveQueue.add(info)
+        if (!resolving) resolveNext()
+    }
+
+    @Synchronized
+    private fun resolveNext() {
+        val next = resolveQueue.poll()
+        if (next == null) {
+            resolving = false
+            return
+        }
+        resolving = true
         try {
-            nsdManager.discoverServices("_ipp._tcp", NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+            nsdManager.resolveService(next, object : NsdManager.ResolveListener {
+                override fun onResolveFailed(info: NsdServiceInfo?, errorCode: Int) {
+                    Log.w("DizopDiscovery", "Resolve failed: $errorCode")
+                    finishResolve()
+                }
+
+                override fun onServiceResolved(resolvedInfo: NsdServiceInfo) {
+                    try {
+                        handleResolvedPrinter(resolvedInfo)
+                    } finally {
+                        finishResolve()
+                    }
+                }
+            })
         } catch (e: Exception) {
-            Log.e("DizopDiscovery", "Error starting IPP discovery", e)
-            _isScanning.value = false
+            Log.e("DizopDiscovery", "Resolve exception", e)
+            finishResolve()
         }
+    }
 
-        // Additional service types for legacy & alternate network printer protocols
-        try {
-            val rawListener = object : NsdManager.DiscoveryListener {
-                override fun onStartDiscoveryFailed(s: String?, err: Int) {}
-                override fun onStopDiscoveryFailed(s: String?, err: Int) {}
-                override fun onDiscoveryStarted(s: String?) {}
-                override fun onDiscoveryStopped(s: String?) {}
-                override fun onServiceFound(info: NsdServiceInfo) {
-                    try {
-                        nsdManager.resolveService(info, object : NsdManager.ResolveListener {
-                            override fun onResolveFailed(i: NsdServiceInfo?, err: Int) {}
-                            override fun onServiceResolved(res: NsdServiceInfo) {
-                                handleResolvedPrinter(res)
-                            }
-                        })
-                    } catch (_: Exception) {}
-                }
-                override fun onServiceLost(info: NsdServiceInfo) {}
-            }
-            nsdManager.discoverServices("_printer._tcp", NsdManager.PROTOCOL_DNS_SD, rawListener)
-        } catch (_: Exception) {}
-
-        try {
-            val pdlListener = object : NsdManager.DiscoveryListener {
-                override fun onStartDiscoveryFailed(s: String?, err: Int) {}
-                override fun onStopDiscoveryFailed(s: String?, err: Int) {}
-                override fun onDiscoveryStarted(s: String?) {}
-                override fun onDiscoveryStopped(s: String?) {}
-                override fun onServiceFound(info: NsdServiceInfo) {
-                    try {
-                        nsdManager.resolveService(info, object : NsdManager.ResolveListener {
-                            override fun onResolveFailed(i: NsdServiceInfo?, err: Int) {}
-                            override fun onServiceResolved(res: NsdServiceInfo) {
-                                handleResolvedPrinter(res)
-                            }
-                        })
-                    } catch (_: Exception) {}
-                }
-                override fun onServiceLost(info: NsdServiceInfo) {}
-            }
-            nsdManager.discoverServices("_pdl-datastream._tcp", NsdManager.PROTOCOL_DNS_SD, pdlListener)
-        } catch (_: Exception) {}
+    @Synchronized
+    private fun finishResolve() {
+        resolving = false
+        resolveNext()
     }
 
     private fun handleResolvedPrinter(info: NsdServiceInfo) {
@@ -276,10 +276,19 @@ class UniversalPrinterDiscovery(
     fun stopDiscovery() {
         if (!_isScanning.value) return
         try {
-            discoveryListener?.let { nsdManager.stopServiceDiscovery(it) }
-        } catch (e: Exception) {
-            Log.e("DizopDiscovery", "Stop error", e)
+            activeListeners.toList().forEach { l ->
+                try {
+                    nsdManager.stopServiceDiscovery(l)
+                } catch (e: Exception) {
+                    Log.e("DizopDiscovery", "Stop error", e)
+                }
+            }
+            activeListeners.clear()
         } finally {
+            synchronized(this) {
+                resolveQueue.clear()
+                resolving = false
+            }
             _isScanning.value = false
             wifiDirectManager.stopDiscovery()
             if (multicastLock?.isHeld == true) {
