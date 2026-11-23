@@ -12,12 +12,24 @@ android {
         applicationId = "com.dizop.print"
         minSdk = 26
         targetSdk = 35
-        versionCode = 112
-        versionName = "1.0.12"
+        versionCode = 113
+        versionName = "1.0.13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    // Fixed keystore so every CI-built APK has the SAME signature and in-app updates can install
+    // over each other. NOTE: this key is committed (public repo) - move it to a GitHub Secret
+    // for real protection.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("dizop-ci.jks")
+            storePassword = "dizop-ci"
+            keyAlias = "dizop"
+            keyPassword = "dizop-ci"
         }
     }
 
