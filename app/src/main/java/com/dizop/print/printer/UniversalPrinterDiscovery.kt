@@ -120,7 +120,7 @@ class UniversalPrinterDiscovery(
 
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
             Log.i("DizopDiscovery", "Service found: ${serviceInfo.serviceName} ($serviceType)")
-            enqueueResolve(serviceInfo)
+            enqueueResolve(serviceInfo, serviceType)
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
@@ -130,22 +130,24 @@ class UniversalPrinterDiscovery(
         }
     }
 
-    private val resolveQueue = java.util.ArrayDeque<NsdServiceInfo>()
+    private val resolveQueue = java.util.ArrayDeque<Pair<NsdServiceInfo, String>>()
     private var resolving = false
 
     @Synchronized
-    private fun enqueueResolve(info: NsdServiceInfo) {
-        resolveQueue.add(info)
+    private fun enqueueResolve(info: NsdServiceInfo, serviceType: String) {
+        resolveQueue.add(info to serviceType)
         if (!resolving) resolveNext()
     }
 
     @Synchronized
     private fun resolveNext() {
-        val next = resolveQueue.poll()
-        if (next == null) {
+        val queued = resolveQueue.poll()
+        if (queued == null) {
             resolving = false
             return
         }
+        val next = queued.first
+        val serviceType = queued.second
         resolving = true
         try {
             nsdManager.resolveService(next, object : NsdManager.ResolveListener {
@@ -156,7 +158,7 @@ class UniversalPrinterDiscovery(
 
                 override fun onServiceResolved(resolvedInfo: NsdServiceInfo) {
                     try {
-                        handleResolvedPrinter(resolvedInfo)
+                        handleResolvedPrinter(resolvedInfo, serviceType)
                     } finally {
                         finishResolve()
                     }
@@ -174,49 +176,110 @@ class UniversalPrinterDiscovery(
         resolveNext()
     }
 
-    private fun handleResolvedPrinter(info: NsdServiceInfo) {
+    private val ippProbeClient = com.dizop.print.printer.protocol.ipp.IppClient()
+
+    /**
+     * The advertised port says nothing about the protocol: _printer._tcp is LPD (port 515),
+     * _pdl-datastream._tcp is raw JetDirect (9100) and only _ipp._tcp is IPP. Treating every
+     * non-9100 port as IPP sent IPP/HTTP POSTs to the LPD port ("unexpected end of stream").
+     */
+    private fun handleResolvedPrinter(info: NsdServiceInfo, serviceType: String) {
         val host = info.host?.hostAddress ?: return
-        val port = info.port
         val name = info.serviceName
         val brand = detectBrand(name)
 
-        // Parse dynamic mDNS TXT record attributes if present
-        var resourcePath = "ipp/print"
-        try {
-            val attributes = info.attributes
-            if (attributes != null && attributes.containsKey("rp")) {
-                val rpBytes = attributes["rp"]
-                if (rpBytes != null && rpBytes.isNotEmpty()) {
-                    resourcePath = String(rpBytes, java.nio.charset.StandardCharsets.UTF_8).trimStart('/')
-                }
+        when (serviceType) {
+            "_ipp._tcp" -> {
+                // Parse dynamic mDNS TXT record attributes if present
+                var resourcePath = "ipp/print"
+                try {
+                    val rpBytes = info.attributes?.get("rp")
+                    if (rpBytes != null && rpBytes.isNotEmpty()) {
+                        resourcePath = String(rpBytes, java.nio.charset.StandardCharsets.UTF_8).trimStart('/')
+                    }
+                } catch (_: Exception) {}
+                upsertPrinter(
+                    buildPrinter(host, info.port, name, brand, PrinterProtocol.IPP, resourcePath)
+                )
             }
-        } catch (_: Exception) {}
+            "_pdl-datastream._tcp" -> {
+                // Raw JetDirect is only a fallback; an IPP entry for the same host always wins
+                upsertPrinter(
+                    buildPrinter(host, info.port, name, brand, PrinterProtocol.RAW_JETDIRECT, "")
+                )
+                probeIpp(host, name, brand)
+            }
+            else -> {
+                // _printer._tcp = LPD/LPR, which this app cannot speak. Most such printers also
+                // accept IPP on 631, so probe for it instead of listing an unusable LPD port.
+                probeIpp(host, name, brand)
+            }
+        }
+    }
 
-        val printer = DiscoveredPrinter(
-            id = "$host:$port",
-            name = name.replace("_", " "),
-            model = name,
-            hostAddress = host,
-            port = port,
-            resourcePath = resourcePath,
-            brand = brand,
-            protocol = if (port == 9100) PrinterProtocol.RAW_JETDIRECT else PrinterProtocol.IPP,
-            isOnline = true,
-            isReady = true,
-            // Accurate telemetry: empty list means not reported / unknown (never fake)
-            inkLevels = emptyList()
-        )
+    private fun buildPrinter(
+        host: String,
+        port: Int,
+        name: String,
+        brand: PrinterBrand,
+        protocol: PrinterProtocol,
+        resourcePath: String
+    ) = DiscoveredPrinter(
+        id = "$host:$port",
+        name = name.replace("_", " "),
+        model = name,
+        hostAddress = host,
+        port = port,
+        resourcePath = resourcePath,
+        brand = brand,
+        protocol = protocol,
+        isOnline = true,
+        isReady = true,
+        // Accurate telemetry: empty list means not reported / unknown (never fake)
+        inkLevels = emptyList()
+    )
 
-        upsertPrinter(printer)
+    /** Verifies IPP on the standard port 631 off the resolve thread; adds the printer only on a real reply. */
+    private fun probeIpp(host: String, name: String, brand: PrinterBrand) {
+        Thread {
+            try {
+                val reply = ippProbeClient.queryPrinterAttributes(
+                    printerHost = host,
+                    printerPort = 631,
+                    resourcePath = "ipp/print",
+                    network = networkRouter?.printerWifiNetwork?.value
+                )
+                if (reply.status == com.dizop.print.printer.protocol.ipp.IppResponseStatus.SUCCESS) {
+                    // Never replace an IPP entry that mDNS already advertised (it carries the right port/rp)
+                    upsertPrinter(
+                        buildPrinter(host, 631, name, brand, PrinterProtocol.IPP, "ipp/print"),
+                        replaceSameRank = false
+                    )
+                }
+            } catch (e: Exception) {
+                Log.d("DizopDiscovery", "IPP probe failed for $host: ${e.message}")
+            }
+        }.start()
+    }
+
+    private fun rank(p: PrinterProtocol) = when (p) {
+        PrinterProtocol.IPP -> 2
+        PrinterProtocol.RAW_JETDIRECT -> 1
+        else -> 0
     }
 
     /**
      * Atomic, host-based upsert. NSD resolve callbacks arrive on binder threads and the same
      * physical printer is advertised under several services/ports (_ipp, _printer, _pdl-datastream),
      * so a read-modify-write on id ("host:port") produced duplicate cards for one printer.
-     * An IPP entry is preferred over a raw 9100 entry for the same host unless [forceReplace] is set.
+     * Protocol priority per host: IPP over raw 9100, unless [forceReplace] is set.
      */
-    private fun upsertPrinter(printer: DiscoveredPrinter, atFront: Boolean = false, forceReplace: Boolean = false) {
+    private fun upsertPrinter(
+        printer: DiscoveredPrinter,
+        atFront: Boolean = false,
+        forceReplace: Boolean = false,
+        replaceSameRank: Boolean = true
+    ) {
         _printers.update { current ->
             val idx = current.indexOfFirst {
                 it.id == printer.id ||
@@ -224,9 +287,10 @@ class UniversalPrinterDiscovery(
             }
             if (idx >= 0) {
                 val existing = current[idx]
-                val keepExisting = !forceReplace &&
-                    existing.protocol == PrinterProtocol.IPP &&
-                    printer.protocol != PrinterProtocol.IPP
+                val keepExisting = !forceReplace && (
+                    rank(existing.protocol) > rank(printer.protocol) ||
+                        (rank(existing.protocol) == rank(printer.protocol) && !replaceSameRank)
+                    )
                 val merged = if (keepExisting) existing else printer
                 current.toMutableList().also { it[idx] = merged }
             } else if (atFront) {
