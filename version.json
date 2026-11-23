@@ -1,7 +1,7 @@
 {
-  "versionCode": 106,
-  "versionName": "1.0.6",
-  "changelog": "Dizop v1.0.6 CameraX & Offline Database Release: Added in-app CameraX high-res document scanner with live viewfinder, flashlight/torch toggle and guide overlay, offline SQLite database for persistent print activity history and favorite printers, and verified 14/14 automated test suites.",
-  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.6/Dizop.apk",
-  "expectedSha256": "04fb479b8786a33a83a6f275f3c2cbd201f5f0ca4b42052254cd27206143d383"
+  "versionCode": 111,
+  "versionName": "1.0.11",
+  "changelog": "ci: auto-publish release and update version.json for in-app updates",
+  "apkUrl": "https://github.com/parakhmewara2002-gif/Dizop/releases/download/v1.0.11/Dizop.apk",
+  "expectedSha256": "f0e2f557d9e5cfef060494a2513ce64de07d08055fab09743f433a8f57cd1ae7"
 }
