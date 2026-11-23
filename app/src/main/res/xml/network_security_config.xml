@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network printers speak plain HTTP (IPP over http://<ip>:631) on the local LAN.
+  Printer IPs are dynamic and domain-config does not support CIDR ranges,
+  so cleartext must be permitted in base-config.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

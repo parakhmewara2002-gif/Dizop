@@ -13,6 +13,7 @@ import com.dizop.print.network.DualNetworkRouter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 class UniversalPrinterDiscovery(
     private val context: Context,
@@ -206,14 +207,34 @@ class UniversalPrinterDiscovery(
             inkLevels = emptyList()
         )
 
-        val list = _printers.value.toMutableList()
-        val existingIndex = list.indexOfFirst { it.id == printer.id }
-        if (existingIndex >= 0) {
-            list[existingIndex] = printer
-        } else {
-            list.add(printer)
+        upsertPrinter(printer)
+    }
+
+    /**
+     * Atomic, host-based upsert. NSD resolve callbacks arrive on binder threads and the same
+     * physical printer is advertised under several services/ports (_ipp, _printer, _pdl-datastream),
+     * so a read-modify-write on id ("host:port") produced duplicate cards for one printer.
+     * An IPP entry is preferred over a raw 9100 entry for the same host unless [forceReplace] is set.
+     */
+    private fun upsertPrinter(printer: DiscoveredPrinter, atFront: Boolean = false, forceReplace: Boolean = false) {
+        _printers.update { current ->
+            val idx = current.indexOfFirst {
+                it.id == printer.id ||
+                    (it.hostAddress.isNotBlank() && it.hostAddress == printer.hostAddress)
+            }
+            if (idx >= 0) {
+                val existing = current[idx]
+                val keepExisting = !forceReplace &&
+                    existing.protocol == PrinterProtocol.IPP &&
+                    printer.protocol != PrinterProtocol.IPP
+                val merged = if (keepExisting) existing else printer
+                current.toMutableList().also { it[idx] = merged }
+            } else if (atFront) {
+                listOf(printer) + current
+            } else {
+                current + printer
+            }
         }
-        _printers.value = list
     }
 
     private fun detectBrand(name: String): PrinterBrand {
@@ -249,14 +270,7 @@ class UniversalPrinterDiscovery(
             isReady = true,
             inkLevels = emptyList()
         )
-        val list = _printers.value.toMutableList()
-        val existingIndex = list.indexOfFirst { it.id == printer.id }
-        if (existingIndex >= 0) {
-            list[existingIndex] = printer
-        } else {
-            list.add(0, printer)
-        }
-        _printers.value = list
+        upsertPrinter(printer, atFront = true, forceReplace = true)
     }
 
     fun stopDiscovery() {
